@@ -1103,13 +1103,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ab94a096c376c85459b293ed61385e3d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _asteroidPrefab: {fileID: 6233630046224203706, guid: 7c9751d5fe7d9684487726648c7c332c, type: 3}
-  _spawnPoint: {fileID: 1817330339}
-  _spawnDelay: 1
-  _minForce: 5
-  _maxForce: 10
-  _minTorque: 1
-  _maxTorque: 10
+  asteroidPrefab: {fileID: 6233630046224203706, guid: 7c9751d5fe7d9684487726648c7c332c, type: 3}
+  spawnPoint: {fileID: 1817330339}
+  spawnDelay: 1.5
+  minSpeed: 3
+  maxSpeed: 8
+  minSpin: -50
+  maxSpin: 50
 --- !u!1 &1154003271
 GameObject:
   m_ObjectHideFlags: 0
