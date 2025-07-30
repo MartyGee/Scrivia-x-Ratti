@@ -1,4 +1,6 @@
 ﻿using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
 
 public class AsteroidSpawner : MonoBehaviour
 {
@@ -10,61 +12,194 @@ public class AsteroidSpawner : MonoBehaviour
     [SerializeField] private float maxSpeed = 8f;
     [SerializeField] private float minSpin = -50f;
     [SerializeField] private float maxSpin = 50f;
+    [SerializeField] private string destructionTag = "PlayerWeapon";
+
+    [Header("Effects")]
+    [SerializeField] private GameObject destructionEffect;
+    [SerializeField] private float effectDuration = 1f;
+    [SerializeField] private GameObject spaceship;
+
+    [Header("Collision Settings")]
+    [SerializeField] private string asteroidTag = "Asteroid";
+
+    private List<GameObject> activeAsteroids = new List<GameObject>();
 
     private void Start()
     {
-        // Safety checks
+        if (!ValidateComponents()) return;
+
+        // Configure all collision systems
+        SetupSpaceshipCollision();
+        TagAllAsteroids();
+
+        StartCoroutine(SpawnAsteroids());
+    }
+
+    private bool ValidateComponents()
+    {
         if (!asteroidPrefab)
         {
             Debug.LogError("Asteroid prefab not assigned!");
-            return;
+            return false;
         }
 
-        if (!asteroidPrefab.GetComponent<Rigidbody2D>())
+        if (!asteroidPrefab.TryGetComponent<Rigidbody2D>(out _))
         {
             Debug.LogError("Asteroid prefab needs a Rigidbody2D!");
-            return;
+            return false;
         }
 
         if (!spawnPoint)
         {
             Debug.LogError("Spawn point not assigned!");
-            return;
+            return false;
         }
 
-        StartCoroutine(SpawnAsteroids());
+        if (!spaceship)
+        {
+            Debug.LogError("Spaceship reference not assigned!");
+            return false;
+        }
+
+        return true;
     }
 
-    private System.Collections.IEnumerator SpawnAsteroids()
+    private void TagAllAsteroids()
+    {
+        asteroidPrefab.tag = asteroidTag;
+    }
+
+    private void SetupSpaceshipCollision()
+    {
+        // Ensure spaceship has required components
+        if (!spaceship.TryGetComponent<Collider2D>(out var shipCollider))
+        {
+            shipCollider = spaceship.AddComponent<BoxCollider2D>();
+        }
+        shipCollider.isTrigger = true;
+
+        if (!spaceship.TryGetComponent<SpaceshipCollisionHandler>(out var handler))
+        {
+            handler = spaceship.AddComponent<SpaceshipCollisionHandler>();
+        }
+        handler.Initialize(this, destructionEffect, effectDuration);
+    }
+
+    private IEnumerator SpawnAsteroids()
     {
         while (true)
         {
-            SpawnAsteroid();
             yield return new WaitForSeconds(spawnDelay);
+            SpawnAsteroid();
         }
     }
 
     private void SpawnAsteroid()
     {
-        // Create asteroid with random rotation
         GameObject asteroid = Instantiate(
             asteroidPrefab,
             spawnPoint.position,
             Quaternion.Euler(0, 0, Random.Range(0f, 360f))
         );
 
-        // Configure physics
+        SetupAsteroidPhysics(asteroid);
+        AddCollisionHandler(asteroid);
+        activeAsteroids.Add(asteroid);
+    }
+
+    private void SetupAsteroidPhysics(GameObject asteroid)
+    {
         Rigidbody2D rb = asteroid.GetComponent<Rigidbody2D>();
-        rb.gravityScale = 0f; // Disable gravity
-        rb.linearDamping = 0f; // Remove any drag
-
-        // Set constant velocity (straight line movement)
         Vector2 direction = Random.insideUnitCircle.normalized;
-        float speed = Random.Range(minSpeed, maxSpeed);
-        rb.linearVelocity = direction * speed;
+        rb.velocity = direction * Random.Range(minSpeed, maxSpeed);
+        rb.angularVelocity = Random.Range(minSpin, maxSpin);
+    }
 
-        // Add random spin
-        float spin = Random.Range(minSpin, maxSpin);
-        rb.angularVelocity = spin;
+    private void AddCollisionHandler(GameObject asteroid)
+    {
+        if (!asteroid.TryGetComponent<Collider2D>(out var collider))
+        {
+            collider = asteroid.AddComponent<CircleCollider2D>();
+        }
+        collider.isTrigger = true;
+
+        AsteroidCollisionHandler handler = asteroid.AddComponent<AsteroidCollisionHandler>();
+        handler.Initialize(this, destructionTag, destructionEffect, effectDuration);
+    }
+
+    public void DestroyAsteroid(GameObject asteroid, GameObject effectPrefab)
+    {
+        if (activeAsteroids.Contains(asteroid))
+        {
+            if (effectPrefab != null)
+            {
+                GameObject effect = Instantiate(effectPrefab, asteroid.transform.position, Quaternion.identity);
+                Destroy(effect, effectDuration);
+            }
+
+            activeAsteroids.Remove(asteroid);
+            Destroy(asteroid);
+        }
+    }
+}
+
+public class AsteroidCollisionHandler : MonoBehaviour
+{
+    private AsteroidSpawner spawner;
+    private string destroyTag;
+    private GameObject destructionEffect;
+    private float effectDuration;
+
+    public void Initialize(AsteroidSpawner spawnerRef, string tag, GameObject effect, float duration)
+    {
+        spawner = spawnerRef;
+        destroyTag = tag;
+        destructionEffect = effect;
+        effectDuration = duration;
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.CompareTag(destroyTag))
+        {
+            spawner.DestroyAsteroid(gameObject, destructionEffect);
+        }
+    }
+}
+
+public class SpaceshipCollisionHandler : MonoBehaviour
+{
+    private AsteroidSpawner spawner;
+    private GameObject destructionEffect;
+    private float effectDuration;
+
+    public void Initialize(AsteroidSpawner spawnerRef, GameObject effect, float duration)
+    {
+        spawner = spawnerRef;
+        destructionEffect = effect;
+        effectDuration = duration;
+    }
+
+    private void OnTriggerEnter2D(Collider2D other)
+    {
+        if (other.CompareTag("Asteroid"))
+        {
+            DestroySpaceship();
+        }
+    }
+
+    private void DestroySpaceship()
+    {
+        if (destructionEffect != null)
+        {
+            GameObject effect = Instantiate(destructionEffect, transform.position, Quaternion.identity);
+            Destroy(effect, effectDuration);
+        }
+
+        Debug.Log("Spaceship destroyed!");
+        Destroy(gameObject);
+
+        // Add any additional game over logic here
+        // Example: FindObjectOfType<GameManager>().GameOver();
     }
 }
